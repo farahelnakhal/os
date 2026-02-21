@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+#include "simple.h"
+
 #define MAX_INPUT_SIZE 1024 // defining a maximum lenght of the user input
 
 int main(){

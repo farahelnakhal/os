@@ -8,7 +8,7 @@ CFLAGS = -Wall -Wextra -std=c11
 TARGET = myshell
 
 # Source files
-SRCS = main.c simple.c pipline.c
+SRCS = main.c simple.c
 
 # Compile all
 all:
