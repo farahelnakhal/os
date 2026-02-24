@@ -8,8 +8,38 @@
 #include <sys/wait.h>
 
 #include "simple.h"
+#include "pipeline.h"
 
 #define MAX_INPUT_SIZE 1024 // defining a maximum lenght of the user input
+
+void preprocess_input(char *input) {
+    char buffer[2048];
+    int i = 0, j = 0;
+
+    while (input[i] != '\0') {
+        //handle 2>
+        if (input[i] == '2' && input[i+1] == '>') {
+            buffer[j++] = ' ';
+            buffer[j++] = '2';
+            buffer[j++] = '>';
+            buffer[j++] = ' ';
+            i += 2;
+        }
+        //handle single symbols
+        else if (input[i] == '<' || input[i] == '>' || input[i] == '|') {
+            buffer[j++] = ' ';
+            buffer[j++] = input[i];
+            buffer[j++] = ' ';
+            i++;
+        }
+        else {
+            buffer[j++] = input[i++];
+        }
+    }
+
+    buffer[j] = '\0';
+    strcpy(input, buffer);
+}
 
 int main(){
     char input[MAX_INPUT_SIZE]; // storing the user input
@@ -17,6 +47,8 @@ int main(){
     while(1){ // loop to keep the shell running
         //print the shell prompt:
         printf("$ ");
+        fflush(stdout); //fflush to ensure immediate print
+
 
         //read the user input:
         if(fgets(input, sizeof(input), stdin) == NULL){ // check if the input is valid
@@ -24,7 +56,7 @@ int main(){
             printf("\n");
             break;
         }
-
+        preprocess_input(input);
         //remove any newline character from the input
         input[strcspn(input, "\n")] = 0;
 
@@ -39,10 +71,13 @@ int main(){
         }
 
         //if the input contains a pipe, we will handle it as a pipeline
-        //!!!! come back to this after you have pipiline code from farah!!!
-
+        if(strchr(input, '|') != NULL) {
+            execute_pipeline(input);
+        } 
         //otherwise, we will handle it as a simple command
-        execute_simple_command(input);
+        else {
+            execute_simple_command(input);
+        }
     }
     return 0;
 }
