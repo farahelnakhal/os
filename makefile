@@ -1,19 +1,23 @@
-
-# makefile for myshell project
-
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11
+CFLAGS = -Wall -Wextra -g
 
-# Output executable name
 TARGET = myshell
 
-# Source files
-SRCS = main.c simple.c
+OBJ = main.o pipeline.o simple.o
 
-# Compile all
-all:
-	$(CC) $(CFLAGS) $(SRCS) -o $(TARGET)
+all: $(TARGET)
 
-# Clean compiled files
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJ)
+
+main.o: main.c pipeline.h simple.h
+	$(CC) $(CFLAGS) -c main.c
+
+pipeline.o: pipeline.c pipeline.h
+	$(CC) $(CFLAGS) -c pipeline.c
+
+simple.o: simple.c simple.h
+	$(CC) $(CFLAGS) -c simple.c
+
 clean:
-	rm -f $(TARGET)
+	rm -f $(OBJ) $(TARGET)
