@@ -8,6 +8,7 @@
 #include <sys/wait.h>
 
 #include "simple.h"
+#include "pipeline.h"
 
 #define MAX_INPUT_SIZE 1024 // defining a maximum lenght of the user input
 
@@ -17,6 +18,8 @@ int main(){
     while(1){ // loop to keep the shell running
         //print the shell prompt:
         printf("$ ");
+        fflush(stdout); //fflush to ensure immediate print
+
 
         //read the user input:
         if(fgets(input, sizeof(input), stdin) == NULL){ // check if the input is valid
@@ -39,10 +42,13 @@ int main(){
         }
 
         //if the input contains a pipe, we will handle it as a pipeline
-        //!!!! come back to this after you have pipiline code from farah!!!
-
+        if(strchr(input, '|') != NULL) {
+            execute_pipeline(input);
+        } 
         //otherwise, we will handle it as a simple command
-        execute_simple_command(input);
+        else {
+            execute_simple_command(input);
+        }
     }
     return 0;
 }
