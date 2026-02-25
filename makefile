@@ -1,3 +1,4 @@
+// Makefile for myshell project
 CC = gcc
 CFLAGS = -Wall -Wextra -g
 
