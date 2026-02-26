@@ -13,12 +13,12 @@
 #define MAX_INPUT_SIZE 1024 // defining a maximum lenght of the user input
 
 void preprocess_input(char *input) {
-    char buffer[2048];
+    char buffer[4096];
     int i = 0, j = 0;
 
     while (input[i] != '\0') {
         //handle 2>
-        if (input[i] == '2' && input[i+1] == '>') {
+        if (input[i] == '2' && input[i+1] == '>' && (i == 0 || isspace((unsigned char)input[i-1]))) {
             buffer[j++] = ' ';
             buffer[j++] = '2';
             buffer[j++] = '>';
