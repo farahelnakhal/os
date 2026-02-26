@@ -6,10 +6,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <ctype.h>
 
 #include "simple.h"
 #include "pipeline.h"
+#include <ctype.h>
 
 #define MAX_INPUT_SIZE 1024 // defining a maximum lenght of the user input
 
