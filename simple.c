@@ -91,7 +91,7 @@ void execute_simple_command(char *input){
 
             //error if the fike cannot be opened
             if(fd < 0){
-                perror("Error opening input file");
+                fprintf(stderr, "File not found.\n");
                 exit(EXIT_FAILURE);
             }
             //redirect standard input to the file
@@ -136,7 +136,7 @@ void execute_simple_command(char *input){
         // execute the command with its arguments
         execvp(args[0], args); 
 
-        perror("exec failed"); // if exec returns, it means it failed
+        fprintf(stderr, "Command not found.\n"); // if exec returns, it means it failed
         exit(EXIT_FAILURE); // exit with failure status
     } 
     
