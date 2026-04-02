@@ -29,7 +29,7 @@ void trim_whitespace(char *str) {
 }
 
 //executes a single command inside a pipeline (or standalone)
-void execute_single_pipe_cmd(char *cmd_str, int is_pipe_sequence) {
+void execute_single_pipe_cmd(char *cmd_str, int is_pipe_sequence, int is_first_cmd) {
     char *args[MAX_ARGS];
     int arg_count = 0;
 
@@ -44,7 +44,14 @@ void execute_single_pipe_cmd(char *cmd_str, int is_pipe_sequence) {
     while (token != NULL) {
         //input redirection
         if (strcmp(token, "<") == 0) {
+            //first command in the pipline can have input redirection
+            if (!is_first_cmd) {
+                fprintf(stderr, "Input redirection only allowed for first command in pipeline.\n");
+                exit(1);
+            }
+
             input_file = strtok(NULL, " ");
+            
             if (!input_file) {
                 fprintf(stderr, "Input file not specified.\n");
                 exit(1);
@@ -198,7 +205,7 @@ void execute_pipeline(char *input) {
                 close(fd[1]);
             }
 
-            execute_single_pipe_cmd(commands[i], num_cmds > 1);
+            execute_single_pipe_cmd(commands[i], num_cmds > 1, i == 0);
         }
         //parent process
         else {

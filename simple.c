@@ -11,72 +11,71 @@
 
 #define MAX_ARGS 100 // defining a maximum number of arguments for a command
 
+int parse_input(char *input, char *args[]);
+
 //function to parse the input command and execute it
 void execute_simple_command(char *input){
     char *args[MAX_ARGS]; // array to store the command and its arguments
-    char *token; // variable to store each token while parsing
+    char *clean_args[MAX_ARGS]; // array to store arguments after removing redirection tokens
     int arg_count = 0; // counter for the number of arguments
+    int clean_count = 0; // counter for the number of executable arguments
 
     char *input_file = NULL; // variable to store the input file for redirection
     char *output_file = NULL; // variable to store the output file for redirection
     char *error_file = NULL; // variable to store the error file for redirection
 
     //parse the input command into tokens
-    token = strtok(input, " "); // split the input by spaces by tokeninzing
+    arg_count = parse_input(input, args); // handle quoted strings and fill the args array
 
-    while(token != NULL && arg_count < MAX_ARGS - 1){ // loop until we have tokens or reach max args
-        
-        // check for input redirection:
-        if(strcmp(token, "<") == 0){ 
-            token = strtok(NULL, " ");
-            //error if missing file after <
-            if(token == NULL){
+    //making a clean arguments array that excludes redirection operators and filenames to fix the error
+    for (int i = 0; i < arg_count; i++) {
+        // input redirection
+        if (strcmp(args[i], "<") == 0) {
+            if (i + 1 >= arg_count) {
                 fprintf(stderr, "Error: Input file not specified\n");
                 return;
             }
-            input_file = token; // store the input file
-        } 
-        
-        // check for output redirection:
-        else if(strcmp(token, ">") == 0){
-            token = strtok(NULL, " ");
+            input_file = args[i + 1];
+            i++; // skip filename
+        }
 
-            //error if missing file after >
-            if(token == NULL){
+        // output redirection
+        else if (strcmp(args[i], ">") == 0) {
+            if (i + 1 >= arg_count) {
                 fprintf(stderr, "Error: Output file not specified\n");
                 return;
             }
-            output_file = token; // store the output file
-        } 
-        
-        // check for error redirection:
-        else if(strcmp(token, "2>") == 0){
-            token = strtok(NULL, " ");
-            //error if missing file after 2>
-            if(token == NULL){
+            output_file = args[i + 1];
+            i++; // skip filename
+        }
+
+        // error redirection
+        else if (strcmp(args[i], "2>") == 0) {
+            if (i + 1 >= arg_count) {
                 fprintf(stderr, "Error: Error output file not specified\n");
                 return;
             }
-            error_file = token;
-        } 
-        
-        //otherwise, it's a regular argument
-        else {
-            args[arg_count++] = token; // store the token in the args array
+            error_file = args[i + 1];
+            i++; // skip filename
         }
 
-        token = strtok(NULL, " "); // get the next token
+        // normal argument
+        else {
+            clean_args[clean_count++] = args[i];
+        }
     }
 
-    //making sure the args array is null-terminated for execvp
-    args[arg_count] = NULL;
+    // null terminate the cleaned argument list
+    clean_args[clean_count] = NULL;
 
-    //if no argument was provided then we will just return without doing anything
-    if(arg_count == 0){
+    // if only redirection was provided then there is no command to run
+    if (clean_count == 0) {
+        if (input_file || output_file || error_file) {
+            fprintf(stderr, "Error: No command specified\n");
+        }
         return;
     }
-
-
+    
     //fork a child process to execute the command
     pid_t pid = fork(); // create a new child process
 
@@ -133,8 +132,39 @@ void execute_simple_command(char *input){
             close(fd); 
         }
 
-        // execute the command with its arguments
-        execvp(args[0], args); 
+        //handle echo as a built-in command
+        if (strcmp(clean_args[0], "echo") == 0) {
+
+            int interpret_escape = 0;
+            int start = 1;
+
+            // check for -e flag
+            if (clean_args[1] && strcmp(clean_args[1], "-e") == 0) {
+                interpret_escape = 1;
+                start = 2;
+            }
+
+            for (int i = start; clean_args[i] != NULL; i++) {
+                char *str = clean_args[i];
+
+                for (int j = 0; str[j] != '\0'; j++) {
+                    if (interpret_escape && str[j] == '\\' && str[j+1] == 'n') {
+                        printf("\n");
+                        j++;
+                    } else {
+                        printf("%c", str[j]);
+                    }
+                }
+
+                if (clean_args[i+1]) printf(" ");
+            }
+
+            printf("\n");
+            exit(EXIT_SUCCESS); // exit after handling echo
+        }
+
+        // execute the command with the cleaned argument list.
+        execvp(clean_args[0], clean_args);
 
         fprintf(stderr, "Command not found.\n"); // if exec returns, it means it failed
         exit(EXIT_FAILURE); // exit with failure status
@@ -143,4 +173,45 @@ void execute_simple_command(char *input){
     else { // parent process
         wait(NULL); // wait for the child process to finish
     }
+}
+
+//function for a tokenizer that handles quoted strings together 
+int parse_input(char *input, char *args[]){
+    int i = 0; // index for args array
+    char *p = input; // pointer to traverse the input string
+    while(*p){
+        //skip spaces
+        while(*p && *p == ' '){
+            p++;
+        }
+        if(*p == '\0'){
+            break; // end of input
+        }
+
+        //handle quoted strings
+        if(*p == '"' || *p == '\''){
+            char quote = *p; // store the type of quote
+            p++; // skip the opening quote
+            args[i++] = p; // start of the argument
+            while(*p && *p != quote){
+                p++; // move to the closing quote
+            }
+            if(*p == quote){
+                *p = '\0'; // null-terminate the argument
+                p++; // skip the closing quote
+            }
+        } 
+        else {
+            args[i++] = p; // start of the argument
+            while(*p && *p != ' '){
+                p++; // move to the end of the argument
+            }
+            if(*p){
+                *p = '\0'; // null-terminate the argument
+                p++; // skip the space
+            }
+        }
+    }
+    args[i] = NULL; // nullterminate the args array
+    return i; // return the number of arguments parsed
 }
