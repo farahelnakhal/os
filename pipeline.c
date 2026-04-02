@@ -10,6 +10,8 @@
 #define MAX_CMDS 20
 #define MAX_ARGS 50
 
+int parse_pipe_input(char *input, char *args[]);
+
 //removes leading and trailing whitespace from a string
 void trim_whitespace(char *str) {
     int start = 0;
@@ -29,62 +31,72 @@ void trim_whitespace(char *str) {
 }
 
 //executes a single command inside a pipeline (or standalone)
-void execute_single_pipe_cmd(char *cmd_str, int is_pipe_sequence, int is_first_cmd) {
+void execute_single_pipe_cmd(char *cmd_str, int is_pipe_sequence, int is_first_cmd, int is_last_cmd) {
     char *args[MAX_ARGS];
+    char *clean_args[MAX_ARGS];
     int arg_count = 0;
+    int clean_count = 0;
 
     //file redirection pointers
     char *input_file = NULL;
     char *output_file = NULL;
     char *err_file = NULL;
 
-    //split command by spaces
-    char *token = strtok(cmd_str, " ");
+    // parse command into tokens while keeping quoted strings intact
+    arg_count = parse_pipe_input(cmd_str, args);
 
-    while (token != NULL) {
+    for (int i = 0; i < arg_count; i++) {
         //input redirection
-        if (strcmp(token, "<") == 0) {
+        if (strcmp(args[i], "<") == 0) {
             //first command in the pipline can have input redirection
             if (!is_first_cmd) {
                 fprintf(stderr, "Input redirection only allowed for first command in pipeline.\n");
                 exit(1);
             }
 
-            input_file = strtok(NULL, " ");
-            
-            if (!input_file) {
+            if (i + 1 >= arg_count) {
                 fprintf(stderr, "Input file not specified.\n");
                 exit(1);
             }
+
+            input_file = args[i + 1];
+            i++;
         }
         //output redirection
-        else if (strcmp(token, ">") == 0) {
-            output_file = strtok(NULL, " ");
-            if (!output_file) {
+        else if (strcmp(args[i], ">") == 0) {
+            //last command in the pipeline can have output redirection
+            if (!is_last_cmd) {
+                fprintf(stderr, "Output redirection only allowed for last command in pipeline.\n");
+                exit(1);
+            }
+
+            if (i + 1 >= arg_count) {
                 fprintf(stderr, "Output file not specified.\n");
                 exit(1);
             }
+
+            output_file = args[i + 1];
+            i++;
         }
         //error redirection
-        else if (strcmp(token, "2>") == 0) {
-            err_file = strtok(NULL, " ");
-            if (!err_file) {
+        else if (strcmp(args[i], "2>") == 0) {
+            if (i + 1 >= arg_count) {
                 fprintf(stderr, "Error output file not specified.\n");
                 exit(1);
             }
+            err_file = args[i + 1];
+            i++;
         }
         //normal argument
         else {
-            args[arg_count++] = token;
+            clean_args[clean_count++] = args[i];
         }
-
-        token = strtok(NULL, " ");
     }
 
-    args[arg_count] = NULL;
+    clean_args[clean_count] = NULL;
 
     //no actual command found
-    if (arg_count == 0) {
+    if (clean_count == 0) {
         fprintf(stderr, "Empty command between pipes.\n");
         exit(1);
     }
@@ -123,7 +135,7 @@ void execute_single_pipe_cmd(char *cmd_str, int is_pipe_sequence, int is_first_c
     }
 
     //execute command
-    execvp(args[0], args);
+    execvp(clean_args[0], clean_args);
 
     //only runs if exec fails
     if (is_pipe_sequence)
@@ -132,6 +144,55 @@ void execute_single_pipe_cmd(char *cmd_str, int is_pipe_sequence, int is_first_c
         fprintf(stderr, "Command not found.\n");
 
     exit(1);
+}
+
+// parse a command string into arg tokens while preserving quoted strings (copied from simple.c)
+int parse_pipe_input(char *input, char *args[]) {
+    int i = 0;
+    char *p = input;
+
+    while (*p) {
+        while (*p && isspace((unsigned char)*p)) {
+            p++;
+        }
+
+        if (*p == '\0') {
+            break;
+        }
+
+        if (*p == '"' || *p == '\'') {
+            char quote = *p;
+            p++;
+            args[i++] = p;
+
+            while (*p && *p != quote) {
+                p++;
+            }
+
+            if (*p == quote) {
+                *p = '\0';
+                p++;
+            }
+        } else {
+            args[i++] = p;
+
+            while (*p && !isspace((unsigned char)*p)) {
+                p++;
+            }
+
+            if (*p) {
+                *p = '\0';
+                p++;
+            }
+        }
+
+        if (i >= MAX_ARGS - 1) {
+            break;
+        }
+    }
+
+    args[i] = NULL;
+    return i;
 }
 
 //parses and executes a full pipeline command
@@ -205,7 +266,7 @@ void execute_pipeline(char *input) {
                 close(fd[1]);
             }
 
-            execute_single_pipe_cmd(commands[i], num_cmds > 1, i == 0);
+            execute_single_pipe_cmd(commands[i], num_cmds > 1, i == 0, i == num_cmds - 1);
         }
         //parent process
         else {
