@@ -9,8 +9,8 @@
 #include <fcntl.h>
 #include <ctype.h>
 
-#define PORT 8080
-#define BUFFER_SIZE 4096
+#define PORT 8080 
+#define BUFFER_SIZE 4096 
 
 int main() {
     int sock;
@@ -20,7 +20,7 @@ int main() {
 
     // create a tcp socket so this client can talk to the shell server
     sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
+    if (sock < 0) { // if socket creation failed, print an error and exit
         perror("socket");
         exit(EXIT_FAILURE);
     }
@@ -30,7 +30,7 @@ int main() {
     server_addr.sin_port = htons(PORT);
 
     // convert localhost text into binary form expected by connect
-    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) { //standard localhost IP address
         perror("inet_pton");
         close(sock);
         exit(EXIT_FAILURE);
@@ -69,7 +69,7 @@ int main() {
         int bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
 
         if (bytes_received <= 0) {
-            // server closed connection or an error happened, so end cleanly
+            // server closed connection or an error happened, so end
             printf("Disconnected from server.\n");
             break;
         }
