@@ -1,51 +1,34 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
+TARGETS = myshell server client
 
-#targets
-SHELL_TARGET = myshell
-SERVER_TARGET = server
+all: $(TARGETS)
 
-#object files
-SHELL_OBJ = main.o pipeline.o simple.o
-SERVER_OBJ = server.o pipeline.o simple.o
+myshell: main.o simple.o pipeline.o
+	$(CC) $(CFLAGS) -o myshell main.o simple.o pipeline.o
 
-#build all targets
-all: $(SHELL_TARGET) $(SERVER_TARGET)
+server: server.o simple.o pipeline.o
+	$(CC) $(CFLAGS) -o server server.o simple.o pipeline.o
 
-#build myshell (Phase 1)
-$(SHELL_TARGET): $(SHELL_OBJ)
-	$(CC) $(CFLAGS) -o $(SHELL_TARGET) $(SHELL_OBJ)
+client: client.o
+	$(CC) $(CFLAGS) -o client client.o
 
-#build server (Phase 2)
-$(SERVER_TARGET): $(SERVER_OBJ)
-	$(CC) $(CFLAGS) -o $(SERVER_TARGET) $(SERVER_OBJ)
-
-#compile main.o for myshell
-main.o: main.c pipeline.h simple.h
+main.o: main.c simple.h pipeline.h
 	$(CC) $(CFLAGS) -c main.c
 
-#compile server.o for server
-server.o: server.c pipeline.h simple.h
+server.o: server.c simple.h pipeline.h
 	$(CC) $(CFLAGS) -c server.c
 
-#compile pipeline.o (shared between myshell and server)
-pipeline.o: pipeline.c pipeline.h
-	$(CC) $(CFLAGS) -c pipeline.c
+client.o: client.c
+	$(CC) $(CFLAGS) -c client.c
 
-#compile simple.o (shared between myshell and server)
 simple.o: simple.c simple.h
 	$(CC) $(CFLAGS) -c simple.c
 
-#clean all compiled files
+pipeline.o: pipeline.c pipeline.h
+	$(CC) $(CFLAGS) -c pipeline.c
+
 clean:
-	rm -f $(SHELL_OBJ) $(SERVER_OBJ) $(SHELL_TARGET) $(SERVER_TARGET)
+	rm -f $(TARGETS) *.o
 
-#clean only server files
-clean-server:
-	rm -f server.o $(SERVER_TARGET)
-
-#clean only shell files
-clean-shell:
-	rm -f $(SHELL_OBJ) $(SHELL_TARGET)
-
-.PHONY: all clean clean-server clean-shell
+.PHONY: all clean

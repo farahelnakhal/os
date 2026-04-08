@@ -20,7 +20,7 @@ int main() {
 
     // create a tcp socket so this client can talk to the shell server
     sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) { // if socket creation failed, print an error and exit
+    if (sock < 0) {
         perror("socket");
         exit(EXIT_FAILURE);
     }
@@ -30,7 +30,7 @@ int main() {
     server_addr.sin_port = htons(PORT);
 
     // convert localhost text into binary form expected by connect
-    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) { //standard localhost IP address
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
         perror("inet_pton");
         close(sock);
         exit(EXIT_FAILURE);
@@ -48,7 +48,7 @@ int main() {
         printf("$ ");
         fflush(stdout);
 
-        // read one command line from stdin; eof means user is done
+        // read one command line from stdin
         if (fgets(input, BUFFER_SIZE, stdin) == NULL) {
             break;
         }
@@ -78,7 +78,7 @@ int main() {
         printf("%s", buffer);
 
         // add a newline only if server output did not already include one
-        if (buffer[strlen(buffer) - 1] != '\n') {
+        if (bytes_received > 0 && buffer[bytes_received - 1] != '\n') {
             printf("\n");
         }
     }
