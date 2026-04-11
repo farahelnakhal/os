@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <ctype.h>
+#include <pthread.h>
 
 #include "simple.h"
 #include "pipeline.h"
@@ -23,6 +24,17 @@
 #define COLOR_OUTPUT "\033[0;32m"
 #define COLOR_ERROR "\033[0;31m"
 #define COLOR_RESET "\033[0m"
+
+// structure for thread data 
+typedef struct {
+    int socket;
+    int client_id;
+    struct sockaddr_in address;
+} client_info;
+
+// client counter for multiple clients
+int client_counter = 0;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 void preprocess_input(char *input) {
     char buffer[4096];
@@ -182,82 +194,90 @@ char* execute_and_capture(char *command) {
     return output;
 }
 
-void handle_client(int client_socket) {
+// thread function to handle 1 client
+void* handle_client(void *arg) {
+    client_info *info = (client_info*)arg;
+
+    int client_socket = info->socket;
+    int client_id = info->client_id;
+    char *ip = inet_ntoa(info->address.sin_addr);
+    int port = ntohs(info->address.sin_port);
+
+    // adding thread id 
+    unsigned long thread_id = (unsigned long)pthread_self();
+
+    // free allocated memory
+    free(arg);
+
     char buffer[MAX_INPUT_SIZE];
     ssize_t bytes_received;
-    
-    printf("%s[INFO]%s Client connected.\n", COLOR_INFO, COLOR_RESET);
-    fflush(stdout);
-    
+
+    printf("[INFO] Client #%d connected from %s:%d. Assigned to Thread-%lu.\n", client_id, ip, port, thread_id);
+
     while (1) {
-        memset(buffer, 0, MAX_INPUT_SIZE);//clear buffer
-        
+        // clear buffer for next command
+        memset(buffer, 0, MAX_INPUT_SIZE);
+
+        // receive command from the client
         bytes_received = recv(client_socket, buffer, MAX_INPUT_SIZE - 1, 0);
-        
-        //handle disconnect or error
+
+        // handle client disconnect or error
         if (bytes_received <= 0) {
             if (bytes_received == 0) {
-                printf("%s[INFO]%s Client disconnected.\n", COLOR_INFO, COLOR_RESET);
-                fflush(stdout);
+                printf("[INFO] Client disconnected.\n");
             } else {
-                perror("recv");
+                perror("recv error");
             }
             break;
         }
-        
-        //null terminate and strip newline
-        buffer[bytes_received] = '\0';
-        buffer[strcspn(buffer, "\r\n")] = '\0';
-        
-        //skip empty input
-        if (strlen(buffer) == 0) {
-            continue;
-        }
-        
-        //handle exit command
+
+        // remove newline character from buffer
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        // handle exit command
         if (strcmp(buffer, "exit") == 0) {
             printf("%s[RECEIVED]%s Received command: \"exit\" from client.\n", COLOR_RECEIVED, COLOR_RESET);
             fflush(stdout);
-            printf("%s[INFO]%s Client requested to exit. Closing connection.\n", COLOR_INFO, COLOR_RESET);
+            printf("[INFO] [Client #%d - %s:%d] Client requested disconnect. Closing connection.\n", client_id, ip, port);            
             fflush(stdout);
             
             send(client_socket, "exit_ack", 8, 0);
             break;
         }
-        
-        //log received command
-        printf("%s[RECEIVED]%s Received command: \"%s\" from client.\n", COLOR_RECEIVED, COLOR_RESET, buffer);
-        fflush(stdout);
-        
-        //log execution start
-        printf("%s[EXECUTING]%s Executing command: \"%s\"\n", COLOR_EXECUTING, COLOR_RESET, buffer);
-        fflush(stdout);
-        
-        //execute command
+
+        // skip empty inputs
+        if (strlen(buffer) == 0) continue;
+
+        // log the received command
+        printf("[RECEIVED] [Client #%d - %s:%d] Received command: \"%s\"\n", client_id, ip, port, buffer);
+
+        printf("[EXECUTING] [Client #%d - %s:%d] Executing command: \"%s\"\n", client_id, ip, port, buffer);
+
+        // execute command and capture output
         char *output = execute_and_capture(buffer);
-        
-        //log output
-        printf("%s[OUTPUT]%s Sending output to client:\n", COLOR_OUTPUT, COLOR_RESET);
-        fflush(stdout);
-        
-        //print output locally
-        if (strlen(output) > 0) {
-            printf("%s", output);
-            if (output[strlen(output) - 1] != '\n') {
-                printf("\n");
-            }
+
+        // log and display output
+        if (strstr(output, "not found") != NULL) {
+            printf("[ERROR] [Client #%d - %s:%d] Command not found: \"%s\"\n", client_id, ip, port, buffer);
+            printf("[OUTPUT] [Client #%d - %s:%d] Sending error message to client:\n%s\n", client_id, ip, port, output);
         } else {
-            printf("(no output)\n");
+            printf("[OUTPUT] [Client #%d - %s:%d] Sending output to client:\n%s\n", client_id, ip, port, output);
         }
-        fflush(stdout);
-        
-        //send output back to client
-        send(client_socket, output, strlen(output), 0);
+
+        // send output back to client
+        if (send(client_socket, output, strlen(output), 0) < 0) {
+            perror("send error");
+        }
+
+        // free allocated output memory
         free(output);
     }
-    
-    shutdown(client_socket, SHUT_RDWR);//close connection cleanly   
+    printf("[INFO] Client #%d disconnected.\n", client_id);
+
+    // close the client connection
     close(client_socket);
+    free(info);
+    return NULL;
 }
 
 int main() {
@@ -300,7 +320,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
     
-    printf("%s[INFO]%s Server started, waiting for client connections\n", COLOR_INFO, COLOR_RESET);
+    printf("[INFO] Server started, waiting for client connections...\n");
     fflush(stdout);
     
     //accept loop
@@ -312,7 +332,28 @@ int main() {
             continue;
         }
         
-        handle_client(client_socket);//handle one client
+        pthread_t tid;
+
+        // allocate memory for socket
+        client_info *info = malloc(sizeof(client_info));
+        info->socket = client_socket;
+        info->address = client_addr;
+
+        // increment client number
+        pthread_mutex_lock(&lock);
+        client_counter++;
+        info->client_id = client_counter;
+        pthread_mutex_unlock(&lock);
+
+        if (pthread_create(&tid, NULL, handle_client, info) != 0) {
+            perror("pthread_create failed");
+            close(client_socket);
+            free(info);
+            continue;
+        }
+
+        // detach thread so it cleans itself
+        pthread_detach(tid);
     }
     
     close(server_socket);
