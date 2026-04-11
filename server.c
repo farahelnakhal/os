@@ -196,8 +196,9 @@ char* execute_and_capture(char *command) {
 
 // thread function to handle 1 client
 void* handle_client(void *arg) {
-    client_info *info = (client_info*)arg;
+    client_info *info = (client_info*)arg; //cast argument to client_info structure
 
+    //extract client details
     int client_socket = info->socket;
     int client_id = info->client_id;
     char *ip = inet_ntoa(info->address.sin_addr);
@@ -212,6 +213,7 @@ void* handle_client(void *arg) {
     char buffer[MAX_INPUT_SIZE];
     ssize_t bytes_received;
 
+    // log client connection with details
     printf("[INFO] Client #%d connected from %s:%d. Assigned to Thread-%lu.\n", client_id, ip, port, thread_id);
 
     while (1) {
@@ -222,10 +224,10 @@ void* handle_client(void *arg) {
         bytes_received = recv(client_socket, buffer, MAX_INPUT_SIZE - 1, 0);
 
         // handle client disconnect or error
-        if (bytes_received <= 0) {
+        if (bytes_received <= 0) { 
             if (bytes_received == 0) {
                 printf("[INFO] Client disconnected.\n");
-            } else {
+            } else { //error occurred
                 perror("recv error");
             }
             break;
@@ -257,10 +259,10 @@ void* handle_client(void *arg) {
         char *output = execute_and_capture(buffer);
 
         // log and display output
-        if (strstr(output, "not found") != NULL) {
+        if (strstr(output, "not found") != NULL) { //log command not found errors
             printf("[ERROR] [Client #%d - %s:%d] Command not found: \"%s\"\n", client_id, ip, port, buffer);
             printf("[OUTPUT] [Client #%d - %s:%d] Sending error message to client:\n%s\n", client_id, ip, port, output);
-        } else {
+        } else { //log normal output
             printf("[OUTPUT] [Client #%d - %s:%d] Sending output to client:\n%s\n", client_id, ip, port, output);
         }
 
