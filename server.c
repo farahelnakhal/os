@@ -35,7 +35,6 @@ typedef struct {
     struct sockaddr_in addr;
 } client_info_t;
 
-
 void preprocess_input(char *input) {
     char buffer[4096];
     int i = 0, j = 0;
@@ -389,8 +388,8 @@ int main() {
             close(client_socket);
             continue;
         }
-
         pthread_detach(tid); //auto cleanup thread on exit
+
     }
 
     close(server_socket);
