@@ -8,7 +8,7 @@ myshell: main.o simple.o pipeline.o
 	$(CC) $(CFLAGS) -o myshell main.o simple.o pipeline.o
 
 server: server.o simple.o pipeline.o
-	$(CC) $(CFLAGS) -o server server.o simple.o pipeline.o
+	$(CC) $(CFLAGS) -o server server.o simple.o pipeline.o -lpthread
 
 client: client.o
 	$(CC) $(CFLAGS) -o client client.o
