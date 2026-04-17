@@ -259,8 +259,8 @@ void *handle_client(void *arg) {
 
         //handle client exit request
         if (strcmp(buffer, "exit") == 0) {
-            printf("%s[RECEIVED]%s [%s] exit command\n", COLOR_RECEIVED, COLOR_RESET, label);
-            printf("%s[INFO]%s [%s] closing connection\n", COLOR_INFO, COLOR_RESET, label);
+            printf("%s[RECEIVED]%s [%s] Received command: \"exit\"\n", COLOR_RECEIVED, COLOR_RESET, label);
+            printf("%s[INFO]%s [%s] Client requested disconnect. Closing connection.\n", COLOR_INFO, COLOR_RESET, label);
 
             fflush(stdout);
 
@@ -269,10 +269,10 @@ void *handle_client(void *arg) {
         }
 
         //log received command
-        printf("%s[RECEIVED]%s [%s] \"%s\"\n", COLOR_RECEIVED, COLOR_RESET, label, buffer);
+        printf("%s[RECEIVED]%s [%s] Received command: \"%s\"\n", COLOR_RECEIVED, COLOR_RESET, label, buffer);
 
         //log execution step
-        printf("%s[EXECUTING]%s [%s] running command\n", COLOR_EXECUTING, COLOR_RESET, label);
+        printf("%s[EXECUTING]%s [%s] Executing command: \"%s\"\n", COLOR_EXECUTING, COLOR_RESET, label, buffer);
 
         fflush(stdout);
 
@@ -286,14 +286,14 @@ void *handle_client(void *arg) {
 
             char error_msg[512];
             snprintf(error_msg, sizeof(error_msg), "Command not found: %s\n", cmd_name);
-            printf("%s[ERROR]%s [%s] invalid command: %s\n", COLOR_ERROR, COLOR_RESET, label, cmd_name);
-            printf("%s[OUTPUT]%s [%s] sending error\n", COLOR_OUTPUT, COLOR_RESET, label);
+            printf("%s[ERROR]%s [%s] Command not found: \"%s\"\n", COLOR_ERROR, COLOR_RESET, label, cmd_name);
+            printf("%s[OUTPUT]%s [%s] Sending error message to client: \"%s\"\n", COLOR_OUTPUT, COLOR_RESET, label, error_msg);
             fflush(stdout);
 
             send(sock, error_msg, strlen(error_msg), 0);
         } else {
             //normal case: send command output back to client
-            printf("%s[OUTPUT]%s [%s] sending response\n", COLOR_OUTPUT, COLOR_RESET, label);
+            printf("%s[OUTPUT]%s [%s] Sending output to client:\n", COLOR_OUTPUT, COLOR_RESET, label);
 
             if (strlen(output) > 0) {
                 printf("%s", output);
@@ -319,7 +319,7 @@ void *handle_client(void *arg) {
 }
 
 int main() {
-    int server_socket, client_socket;
+    int server_socket;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     
@@ -394,3 +394,4 @@ int main() {
 
     close(server_socket);
     return 0;
+}

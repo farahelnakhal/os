@@ -162,20 +162,14 @@ check_remote() {
 # Check that server shows proper format (more flexible matching)
 check_server_format() {
     local name="$1" command="$2"
-    
-    # Clear previous output and send command
     > server_output.log
     send_command_nc "$command" >/dev/null 2>&1
     sleep 0.5
-    
-    # Strip color codes from log for checking
-    local clean_log=$(cat server_output.log | sed 's/\x1b\[[0-9;]*m//g')
-    
-    # Check for all required tags (allowing for extra content)
-    local has_received=$(echo "$clean_log" | grep -c "\[RECEIVED\] Received command: \"$command\"")
-    local has_executing=$(echo "$clean_log" | grep -c "\[EXECUTING\] Executing command: \"$command\"")
-    local has_output=$(echo "$clean_log" | grep -c "\[OUTPUT\] Sending output to client:")
-    
+    # Strip color codes AND null bytes before grepping
+    local clean_log=$(cat server_output.log | tr -d '\000' | sed 's/\x1b\[[0-9;]*m//g')
+    local has_received=$(echo "$clean_log" | grep -cF "[RECEIVED] Received command: \"$command\"")
+    local has_executing=$(echo "$clean_log" | grep -cF "[EXECUTING] Executing command: \"$command\"")
+    local has_output=$(echo "$clean_log" | grep -cF "[OUTPUT] Sending output to client:")
     if [ "$has_received" -ge 1 ] && [ "$has_executing" -ge 1 ] && [ "$has_output" -ge 1 ]; then
         pass "$name"
     else
@@ -473,7 +467,7 @@ sleep 0.5
 # --- Connection Tests --------------------------------------------------------
 echo "exit" | nc -q 1 localhost $SERVER_PORT >/dev/null 2>&1
 sleep 0.5
-check_server_log "Server accepts client connection" "Client connected"
+check_server_log "Server accepts client connection" "connected. Assigned to Thread-"
 
 # --- Basic Remote Command Execution -----------------------------------------
 check_remote "Remote: pwd" "pwd" "test_tmp"
@@ -625,6 +619,160 @@ stop_server
 rm -f server_output.log longfile.txt
 
 cd .. && rm -rf test_tmp
+
+# =============================================================================
+echo -e "\n${YELLOW}========================================${NC}"
+echo -e "${YELLOW}       PHASE 3 TESTING${NC}"
+echo -e "${YELLOW}========================================${NC}\n"
+
+mkdir -p test_tmp3 && cd test_tmp3
+printf 'hello world\nline one\nline two\n' > input.txt
+
+# Find a fresh port for phase 3
+SERVER_PORT=$(
+    for port in $(shuf -i 9000-9999 -n 100); do
+        if ! nc -z localhost $port 2>/dev/null && ! lsof -i :$port >/dev/null 2>&1; then
+            echo $port; break
+        fi
+    done
+)
+echo -e "${YELLOW}Phase 3 using port: $SERVER_PORT${NC}"
+
+# Compile patched server
+sed "s/#define PORT 8080/#define PORT $SERVER_PORT/" ../server.c > server_temp.c
+gcc -Wall -Wextra -g -I.. -c server_temp.c -o server_temp.o 2>/dev/null
+gcc -Wall -Wextra -g -o server_temp server_temp.o ../pipeline.o ../simple.o -lpthread 2>/dev/null
+rm -f server_temp.c server_temp.o
+
+if [ ! -f server_temp ]; then
+    echo -e "${RED}[FAIL] Could not compile Phase 3 server${NC}"
+    FAIL=$((FAIL+1)); TOTAL=$((TOTAL+1))
+    cd .. && rm -rf test_tmp3
+else
+
+./server_temp > server3.log 2>&1 &
+SERVER3_PID=$!
+sleep 1.5
+
+if ! kill -0 $SERVER3_PID 2>/dev/null; then
+    echo -e "${RED}[FAIL] Phase 3 server failed to start${NC}"
+    FAIL=$((FAIL+1)); TOTAL=$((TOTAL+1))
+else
+
+pass "Phase 3: server starts with multithreading"
+TOTAL=$((TOTAL+1))
+
+# Helper: send one command to the phase 3 server
+send3() { printf '%s\nexit\n' "$1" | nc -q 1 localhost $SERVER_PORT 2>/dev/null; }
+
+# --- Launch 3 simultaneous clients -------------------------------------------
+OUT1=/tmp/p3_client1.txt
+OUT2=/tmp/p3_client2.txt
+OUT3=/tmp/p3_client3.txt
+
+{ printf 'ls -l\nexit\n' | nc -q 2 localhost $SERVER_PORT 2>/dev/null; } > "$OUT1" &
+P1=$!
+{ printf 'unknowncmd\nexit\n' | nc -q 2 localhost $SERVER_PORT 2>/dev/null; } > "$OUT2" &
+P2=$!
+{ printf 'pwd\nexit\n'        | nc -q 2 localhost $SERVER_PORT 2>/dev/null; } > "$OUT3" &
+P3=$!
+
+wait $P1 $P2 $P3
+sleep 0.5   # let server log flush
+
+C1=$(cat "$OUT1"); C2=$(cat "$OUT2"); C3=$(cat "$OUT3")
+
+# Client output checks
+TOTAL=$((TOTAL+1))
+echo "$C1" | grep -q "total" && pass "Phase 3: Client 1 (ls -l) works concurrently" \
+    || fail "Phase 3: Client 1 (ls -l) works concurrently" "total" "$C1"
+
+TOTAL=$((TOTAL+1))
+echo "$C2" | grep -qF "Command not found: unknowncmd" \
+    && pass "Phase 3: Client 2 gets descriptive error (Command not found: unknowncmd)" \
+    || fail "Phase 3: Client 2 gets descriptive error" "Command not found: unknowncmd" "$C2"
+
+TOTAL=$((TOTAL+1))
+echo "$C3" | grep -q "/" && pass "Phase 3: Client 3 (pwd) works concurrently" \
+    || fail "Phase 3: Client 3 (pwd) works concurrently" "/" "$C3"
+
+# --- Server log format checks (Phase 3 specific) ----------------------------
+LOG=$(cat server3.log | sed 's/\x1b\[[0-9;]*m//g')
+
+TOTAL=$((TOTAL+1))
+echo "$LOG" | grep -q "Assigned to Thread-" \
+    && pass "Phase 3: Server assigns Thread IDs in [INFO] line" \
+    || fail "Phase 3: Server assigns Thread IDs" "Assigned to Thread-" "$(echo "$LOG" | head -5)"
+
+TOTAL=$((TOTAL+1))
+echo "$LOG" | grep -q "Client #" \
+    && pass "Phase 3: Server labels clients with Client #N" \
+    || fail "Phase 3: Server labels clients" "Client #" "$(echo "$LOG" | head -5)"
+
+TOTAL=$((TOTAL+1))
+echo "$LOG" | grep -q "127.0.0.1" \
+    && pass "Phase 3: Server logs client IP address" \
+    || fail "Phase 3: Server logs IP" "127.0.0.1" "$(echo "$LOG" | head -5)"
+
+TOTAL=$((TOTAL+1))
+echo "$LOG" | grep -q "\[RECEIVED\]" \
+    && pass "Phase 3: [RECEIVED] tag present in server log" \
+    || fail "Phase 3: [RECEIVED] tag" "[RECEIVED]" ""
+
+TOTAL=$((TOTAL+1))
+echo "$LOG" | grep -q "\[EXECUTING\]" \
+    && pass "Phase 3: [EXECUTING] tag present in server log" \
+    || fail "Phase 3: [EXECUTING] tag" "[EXECUTING]" ""
+
+TOTAL=$((TOTAL+1))
+echo "$LOG" | grep -q "\[OUTPUT\]" \
+    && pass "Phase 3: [OUTPUT] tag present in server log" \
+    || fail "Phase 3: [OUTPUT] tag" "[OUTPUT]" ""
+
+TOTAL=$((TOTAL+1))
+echo "$LOG" | grep -q "\[ERROR\]" \
+    && pass "Phase 3: [ERROR] tag present for unknown command" \
+    || fail "Phase 3: [ERROR] tag" "[ERROR]" ""
+
+TOTAL=$((TOTAL+1))
+echo "$LOG" | grep -qF 'Command not found: "unknowncmd"' \
+    && pass "Phase 3: [ERROR] line names the bad command" \
+    || fail "Phase 3: [ERROR] names command" 'Command not found: "unknowncmd"' "$(echo "$LOG" | grep ERROR)"
+
+# Multiple client IDs should appear (at least Client #1 and Client #2)
+TOTAL=$((TOTAL+1))
+client_count=$(echo "$LOG" | grep -o "Client #[0-9]*" | sort -u | wc -l)
+[ "$client_count" -ge 3 ] \
+    && pass "Phase 3: Multiple clients handled simultaneously (>= 3 IDs seen)" \
+    || fail "Phase 3: Multiple clients simultaneously" ">= 3 client IDs" "$client_count seen"
+
+# --- Additional Phase 3 functional tests ------------------------------------
+TOTAL=$((TOTAL+1))
+result=$(send3 "echo hello | cat | wc -c")
+echo "$result" | grep -q "6" \
+    && pass "Phase 3: Three-stage pipeline works remotely" \
+    || fail "Phase 3: Three-stage pipeline" "6" "$result"
+
+TOTAL=$((TOTAL+1))
+result=$(send3 "ls /nonexistent_xyz123")
+echo "$result" | grep -qE "No such file|not found" \
+    && pass "Phase 3: Remote error message for bad path" \
+    || fail "Phase 3: Remote error bad path" "No such file" "$result"
+
+# Server should still be alive after all of that
+TOTAL=$((TOTAL+1))
+kill -0 $SERVER3_PID 2>/dev/null \
+    && pass "Phase 3: Server still running after concurrent load" \
+    || fail "Phase 3: Server still running" "alive" "dead"
+
+fi  # server started
+
+kill -9 $SERVER3_PID 2>/dev/null
+wait $SERVER3_PID 2>/dev/null
+rm -f server_temp server3.log "$OUT1" "$OUT2" "$OUT3"
+fi  # compiled
+
+cd .. && rm -rf test_tmp3
 
 # =============================================================================
 echo -e "\n${YELLOW}========================================${NC}"
