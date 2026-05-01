@@ -231,7 +231,7 @@ void *handle_client(void *arg) {
 
     free(info); //no longer needed after extracting fields
 
-    printf("%s[INFO]%s %s connected. Assigned to Thread-%d.\n", COLOR_INFO, COLOR_RESET, label, client_id);
+    printf("[%d]<<< client connected\n", client_id);
     fflush(stdout);
 
     char buffer[MAX_INPUT_SIZE];
@@ -333,19 +333,40 @@ void *handle_client(void *arg) {
 
                 send(sock, error_msg, strlen(error_msg), 0);
             } else {
-                //normal case: send command output back to client
-                printf("%s[OUTPUT]%s [%s] Sending output to client:\n", COLOR_OUTPUT, COLOR_RESET, label);
+                // created
+                printf("[%d]--- created (-1)\n", client_id);
+                fflush(stdout);
 
-                if (strlen(output) > 0) {
+                // started
+                printf("[%d]--- started (-1)\n", client_id);
+                fflush(stdout);
+
+                // execute command
+                output = execute_and_capture(buffer);
+
+                // send output
+                size_t bytes = strlen(output);
+                send(sock, output, bytes, 0);
+
+                // log bytes sent
+                printf("[%d]<<< %zu bytes sent\n", client_id, bytes);
+                fflush(stdout);
+
+                // ended
+                printf("[%d]--- ended (-1)\n", client_id);
+                fflush(stdout);
+
+                // print output to server terminal (like sample)
+                if (bytes > 0) {
                     printf("%s", output);
-                    if (output[strlen(output) - 1] != '\n')
+                    if (output[bytes - 1] != '\n')
                         printf("\n");
                 } else {
                     printf("(no output)\n");
                 }
 
-                fflush(stdout);
-                send(sock, output, strlen(output), 0);
+                free(output);
+                output = NULL;
             }
 
             free(output); //prevent memory leak from execute_and_capture
