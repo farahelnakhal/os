@@ -10,9 +10,12 @@
 #include <errno.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "simple.h"
 #include "pipeline.h"
+#include "scheduler.h"
+
 
 #define PORT 8080
 #define BUFFER_SIZE 4096
@@ -232,6 +235,7 @@ void *handle_client(void *arg) {
     fflush(stdout);
 
     char buffer[MAX_INPUT_SIZE];
+    char *output = NULL;
 
     while (1) {
         memset(buffer, 0, MAX_INPUT_SIZE);
@@ -276,40 +280,81 @@ void *handle_client(void *arg) {
 
         fflush(stdout);
 
-        //execute command and capture output
-        char *output = execute_and_capture(buffer);
+        // check if command is demo program: "./demo N"
+        if (strncmp(buffer, "./demo", 6) == 0) {
 
-        //check if shell reports command-not-found error
-        if (is_command_not_found(output)) {
-            char cmd_name[256];
-            extract_command_name(buffer, cmd_name, sizeof(cmd_name));
-
-            char error_msg[512];
-            snprintf(error_msg, sizeof(error_msg), "Command not found: %s\n", cmd_name);
-            printf("%s[ERROR]%s [%s] Command not found: \"%s\"\n", COLOR_ERROR, COLOR_RESET, label, cmd_name);
-            printf("%s[OUTPUT]%s [%s] Sending error message to client: \"%s\"\n", COLOR_OUTPUT, COLOR_RESET, label, error_msg);
-            fflush(stdout);
-
-            send(sock, error_msg, strlen(error_msg), 0);
-        } else {
-            //normal case: send command output back to client
-            printf("%s[OUTPUT]%s [%s] Sending output to client:\n", COLOR_OUTPUT, COLOR_RESET, label);
-
-            if (strlen(output) > 0) {
-                printf("%s", output);
-                if (output[strlen(output) - 1] != '\n')
-                    printf("\n");
-            } else {
-                printf("(no output)\n");
+            int n;
+            if (sscanf(buffer, "./demo %d", &n) != 1 || n <= 0) {
+                char *err = "Invalid demo command. Usage: ./demo N\n";
+                send(sock, err, strlen(err), 0);
+                continue;
             }
 
+            // create new task
+            task_t *task = malloc(sizeof(task_t));
+            if (!task) {
+                perror("malloc task");
+                continue;
+            }
+
+            task->task_id = rand(); // or global counter if you prefer
+            task->client_id = client_id;
+            strncpy(task->command, buffer, sizeof(task->command));
+            task->burst_time = n;
+            task->remaining_time = n;
+            task->arrival_time = time(NULL);
+            task->round = 0;
+            task->sock = sock;
+            task->pid = -1;
+
+            printf("%s[INFO]%s [%s] Created demo task with burst %d\n",
+                COLOR_INFO, COLOR_RESET, label, n);
+
             fflush(stdout);
-            send(sock, output, strlen(output), 0);
+
+            // send to scheduler queue
+            scheduler_enqueue(task);
+
+        } else {
+
+            // normal shell command → execute immediately
+            output = execute_and_capture(buffer);
+
+            //check if shell reports command-not-found error
+            if (output != NULL && is_command_not_found(output)) {
+                char cmd_name[256];
+                extract_command_name(buffer, cmd_name, sizeof(cmd_name));
+
+                char error_msg[512];
+                snprintf(error_msg, sizeof(error_msg), "Command not found: %s\n", cmd_name);
+                printf("%s[ERROR]%s [%s] Command not found: \"%s\"\n", COLOR_ERROR, COLOR_RESET, label, cmd_name);
+                printf("%s[OUTPUT]%s [%s] Sending error message to client: \"%s\"\n", COLOR_OUTPUT, COLOR_RESET, label, error_msg);
+                fflush(stdout);
+
+                send(sock, error_msg, strlen(error_msg), 0);
+            } else {
+                //normal case: send command output back to client
+                printf("%s[OUTPUT]%s [%s] Sending output to client:\n", COLOR_OUTPUT, COLOR_RESET, label);
+
+                if (strlen(output) > 0) {
+                    printf("%s", output);
+                    if (output[strlen(output) - 1] != '\n')
+                        printf("\n");
+                } else {
+                    printf("(no output)\n");
+                }
+
+                fflush(stdout);
+                send(sock, output, strlen(output), 0);
+            }
+
+            free(output); //prevent memory leak from execute_and_capture
+            output = NULL;
         }
-
-        free(output); //prevent memory leak from execute_and_capture
     }
-
+    // remove all tasks belonging to this client
+    scheduler_remove_client(client_id);
+    
     //cleanup socket on exit
     shutdown(sock, SHUT_RDWR);
     close(sock);
@@ -361,6 +406,16 @@ int main() {
     printf("%s[INFO]%s Server started, waiting for client connections...\n", COLOR_INFO, COLOR_RESET);
     fflush(stdout);
 
+    // initialize scheduler system
+    scheduler_init();
+
+    // create scheduler thread
+    pthread_t sched_tid;
+    if (pthread_create(&sched_tid, NULL, scheduler_thread, NULL) != 0) {
+        perror("pthread_create scheduler");
+        exit(EXIT_FAILURE);
+    }
+
     while (1) {
         //accept new client connection
         int client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_len);
@@ -394,4 +449,4 @@ int main() {
 
     close(server_socket);
     return 0;
-}
+}   
