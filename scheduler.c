@@ -33,6 +33,8 @@ static int summary_len = 0;
 static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 static sem_t queue_sem;
 
+static int total_time = 0;
+
 //ansi colors for logging
 #define C_WAIT "\033[0;33m"
 #define C_RUN "\033[0;32m"
@@ -89,6 +91,8 @@ static void summary_print(void) {
     fflush(stdout);
     summary_len = 0;
     summary[0] = '\0';
+
+    total_time = 0;
 }
 
 //removes task from queue at index i
@@ -177,8 +181,9 @@ static pid_t start_demo_child(task_t *task) {
 
     //parent process
     close(pfd[1]);
-    extern int sched_pipe_read_fd;
-    sched_pipe_read_fd = pfd[0];
+    // extern int sched_pipe_read_fd;
+    // sched_pipe_read_fd = pfd[0];
+    task->pipe_fd = pfd[0];
 
     return pid;
 }
@@ -187,14 +192,15 @@ int sched_pipe_read_fd = -1; //pipe fd for reading child output
 
 //forwards nonblocking output to client
 static void forward_output(task_t *task) {
-    if (sched_pipe_read_fd < 0) return;
-    int flags = fcntl(sched_pipe_read_fd, F_GETFL, 0);
-    fcntl(sched_pipe_read_fd, F_SETFL, flags | O_NONBLOCK);
+    // if (sched_pipe_read_fd < 0) return;
+    if (task->pipe_fd < 0) return;
+    int flags = fcntl(task->pipe_fd, F_GETFL, 0);
+    fcntl(task->pipe_fd, F_SETFL, flags | O_NONBLOCK);
 
     char buf[4096];
     ssize_t n;
 
-    while ((n = read(sched_pipe_read_fd, buf, sizeof(buf)-1)) > 0) {
+    while ((n = read(task->pipe_fd, buf, sizeof(buf)-1)) > 0) {
         buf[n] = '\0';
 
         if (task->output_len + n < (int)sizeof(task->output_buffer)) {
@@ -204,16 +210,16 @@ static void forward_output(task_t *task) {
         }
     }
 
-    fcntl(sched_pipe_read_fd, F_SETFL, flags & ~O_NONBLOCK);
+    fcntl(task->pipe_fd, F_SETFL, flags & ~O_NONBLOCK);
 }
 
 //drains remaining output after process ends
 static void drain_output(task_t *task) {
-    if (sched_pipe_read_fd < 0) return;
+    if (task->pipe_fd < 0) return;
 
     char buf[4096];
     ssize_t n;
-    while ((n = read(sched_pipe_read_fd, buf, sizeof(buf)-1)) > 0) {
+    while ((n = read(task->pipe_fd, buf, sizeof(buf)-1)) > 0) {
         buf[n] = '\0';
 
         if (task->output_len + n < (int)sizeof(task->output_buffer)) {
@@ -223,8 +229,8 @@ static void drain_output(task_t *task) {
         }
     }
 
-    close(sched_pipe_read_fd);
-    sched_pipe_read_fd = -1;
+    close(task->pipe_fd);
+    task->pipe_fd = -1;
 }
 
 //initializes scheduler
@@ -280,9 +286,13 @@ void scheduler_remove_client(int client_id) {
             waitpid(running_task->pid, NULL, 0);
         }
 
-        if (sched_pipe_read_fd >= 0) {
-            close(sched_pipe_read_fd);
-            sched_pipe_read_fd = -1;
+        // if (running_task->pipe_fd >= 0) {
+        //     close(running_task->pipe_fd);
+        //     running_task->pipe_fd = -1;
+        // }
+        if (running_task && running_task->pipe_fd >= 0) {
+            close(running_task->pipe_fd);
+            running_task->pipe_fd = -1;
         }
 
         free(running_task);
@@ -332,9 +342,9 @@ void *scheduler_thread(void *arg) {
 
         log_state(task->client_id, "running", task->remaining_time);
         // summary_append(task->client_id, task->burst_time);
-        if (task->round == 0) {
-            summary_append(task->client_id, task->burst_time);
-        }
+        // if (task->round == 0) {
+        //     summary_append(task->client_id, task->burst_time);
+        // }
         pthread_mutex_unlock(&queue_mutex);
 
         //start or resume process
@@ -387,6 +397,9 @@ void *scheduler_thread(void *arg) {
             printf("[%d]<<< %d bytes sent\n", task->client_id, task->output_len);
             fflush(stdout);
 
+            total_time += task->burst_time;
+            summary_append(task->client_id, total_time);
+
             if (queue_size == 0) {
                 pthread_mutex_unlock(&queue_mutex);
                 summary_print();
@@ -414,9 +427,9 @@ void *scheduler_thread(void *arg) {
                 kill(task->pid, SIGKILL);
                 waitpid(task->pid, NULL, 0);
 
-                if (sched_pipe_read_fd >= 0) {
-                    close(sched_pipe_read_fd);
-                    sched_pipe_read_fd = -1;
+                if (task->pipe_fd >= 0) {
+                    close(task->pipe_fd);
+                    task->pipe_fd = -1;
                 }
 
                 free(task);
