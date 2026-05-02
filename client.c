@@ -42,6 +42,7 @@ int main() {
         close(sock);
         exit(EXIT_FAILURE);
     }
+    printf("Connected to a server\n");
 
     while (1) {
         // print a shell-style prompt before reading each command

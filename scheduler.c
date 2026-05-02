@@ -72,7 +72,7 @@ static void summary_print(void) {
         summary[summary_len] = '\0';
     }
 
-    printf("%s[SCHEDULER]%s Execution summary: 0)->%s\n", C_INFO, C_RESET, summary);
+    // printf("%s[SCHEDULER]%s Execution summary: 0)->%s\n", C_INFO, C_RESET, summary);
     fflush(stdout);
     summary_len = 0;
     summary[0] = '\0';
@@ -229,7 +229,7 @@ void scheduler_init(void) {
         exit(EXIT_FAILURE);
     }
 
-    printf("%s[SCHEDULER]%s Initialised (RR q1=%ds q*=%ds + SJRF + FCFS)\n", C_INFO, C_RESET, QUANTUM_ROUND1, QUANTUM_REST);
+    // printf("%s[SCHEDULER]%s Initialised (RR q1=%ds q*=%ds + SJRF + FCFS)\n", C_INFO, C_RESET, QUANTUM_ROUND1, QUANTUM_REST);
     fflush(stdout);
 }
 
@@ -242,7 +242,7 @@ void scheduler_enqueue(task_t *task) {
     pthread_mutex_lock(&queue_mutex);
 
     if (queue_size >= MAX_QUEUE_SIZE) {
-        fprintf(stderr, "[SCHEDULER] Queue full. Dropping task %d\n", task->task_id);
+        // fprintf(stderr, "[SCHEDULER] Queue full. Dropping task %d\n", task->task_id);
         pthread_mutex_unlock(&queue_mutex);
         free(task);
         return;
@@ -293,7 +293,7 @@ void scheduler_remove_client(int client_id) {
 //main scheduler loop (runs in separate thread)
 void *scheduler_thread(void *arg) {
     (void)arg;
-    printf("%s[SCHEDULER]%s Thread started.\n", C_INFO, C_RESET);
+    // printf("%s[SCHEDULER]%s Thread started.\n", C_INFO, C_RESET);
     fflush(stdout);
 
     while (1) {
@@ -393,7 +393,7 @@ void *scheduler_thread(void *arg) {
             if (queue_size < MAX_QUEUE_SIZE) {
                 queue[queue_size++] = task;
             } else {
-                fprintf(stderr, "[SCHEDULER] Queue full on reenqueue. Dropping\n");
+                // fprintf(stderr, "[SCHEDULER] Queue full on reenqueue. Dropping\n");
 
                 kill(task->pid, SIGKILL);
                 waitpid(task->pid, NULL, 0);

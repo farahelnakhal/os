@@ -276,8 +276,9 @@ void *handle_client(void *arg) {
         // printf("%s[RECEIVED]%s [%s] Received command: \"%s\"\n", COLOR_RECEIVED, COLOR_RESET, label, buffer);
 
         //log execution step
-        printf("%s[EXECUTING]%s [%s] Executing command: \"%s\"\n", COLOR_EXECUTING, COLOR_RESET, label, buffer);
-
+        // printf("%s[EXECUTING]%s [%s] Executing command: \"%s\"\n", COLOR_EXECUTING, COLOR_RESET, label, buffer);
+        printf("[%d] >>> %s\n", client_id, buffer);
+        
         fflush(stdout);
 
         // check if command is demo program: "./demo N"
@@ -320,46 +321,20 @@ void *handle_client(void *arg) {
         } else {
 
             // normal shell command → execute immediately
+            printf("(%d) --- created (-1)\n", client_id);
+            printf("(%d) --- started (-1)\n", client_id);
+            fflush(stdout);
+
             output = execute_and_capture(buffer);
 
-            //check if shell reports command-not-found error
-            if (output != NULL && is_command_not_found(output)) {
-                char cmd_name[256];
-                extract_command_name(buffer, cmd_name, sizeof(cmd_name));
+            size_t bytes = strlen(output);
+            send(sock, output, bytes, 0);
 
-                char error_msg[512];
-                snprintf(error_msg, sizeof(error_msg), "Command not found: %s\n", cmd_name);
-                printf("%s[ERROR]%s [%s] Command not found: \"%s\"\n", COLOR_ERROR, COLOR_RESET, label, cmd_name);
-                printf("%s[OUTPUT]%s [%s] Sending error message to client: \"%s\"\n", COLOR_OUTPUT, COLOR_RESET, label, error_msg);
-                fflush(stdout);
+            printf("[%d] <<< %zu bytes sent\n", client_id, bytes);
+            printf("(%d) --- ended (-1)\n", client_id);
+            fflush(stdout);
 
-                send(sock, error_msg, strlen(error_msg), 0);
-            } else {
-                // created
-                printf("(%d) --- created (-1)\n", client_id);
-                printf("(%d) --- started (-1)\n", client_id);
-                fflush(stdout);
-
-                char *output = execute_and_capture(buffer);
-
-                size_t bytes = strlen(output);
-                send(sock, output, bytes, 0);
-
-                printf("[%d] <<< %zu bytes sent\n", client_id, bytes);
-                printf("(%d) --- ended (-1)\n", client_id);
-                fflush(stdout);
-
-                if (bytes > 0) {
-                    printf("%s", output);
-                    if (output[bytes - 1] != '\n') printf("\n");
-                } else {
-                    printf("(no output)\n");
-                }
-
-                free(output);
-            }
-
-            free(output); //prevent memory leak from execute_and_capture
+            free(output);
             output = NULL;
         }
     }
@@ -414,7 +389,10 @@ int main() {
         exit(EXIT_FAILURE);
     }
     
-    printf("%s[INFO]%s Server started, waiting for client connections...\n", COLOR_INFO, COLOR_RESET);
+    // printf("%s[INFO]%s Server started, waiting for client connections...\n", COLOR_INFO, COLOR_RESET);
+    printf("-------------------------\n");
+    printf("| Hello, Server Started |\n");
+    printf("-------------------------\n");
     fflush(stdout);
 
     // initialize scheduler system
