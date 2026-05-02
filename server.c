@@ -314,6 +314,7 @@ void *handle_client(void *arg) {
 
             // send to scheduler queue
             scheduler_enqueue(task);
+            continue;
 
         } else {
 
