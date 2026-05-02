@@ -11,6 +11,12 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#define C_BLUE   "\033[0;34m"
+#define C_GREEN  "\033[0;32m"
+#define C_YELLOW "\033[0;33m"
+#define C_RED    "\033[0;31m"
+#define C_RESET  "\033[0m"
+
 //scheduler state
 static task_t *queue[MAX_QUEUE_SIZE]; //task queue
 static int queue_size = 0; //current queue size
@@ -43,23 +49,29 @@ static int elapsed_seconds(void) {
 
 //logs task state (waiting/running/ended)
 static void log_state(int client_id, const char *state, int value) {
-    // const char *colour = C_INFO;
-    // if (strcmp(state, "waiting") == 0) colour = C_WAIT;
-    // else if (strcmp(state, "running") == 0) colour = C_RUN;
-    // else if (strcmp(state, "ended") == 0) colour = C_END;
+    const char *color = C_RESET;
 
-    // printf("%s[%d]---%s %s (%d)\n%s", colour, client_id, C_RESET, state, value, C_RESET);
-    // fflush(stdout);
+    if (strcmp(state, "waiting") == 0) color = C_YELLOW;
+    else if (strcmp(state, "running") == 0) color = C_GREEN;
+    else if (strcmp(state, "ended") == 0) color = C_RED;
 
-    printf("[%d]--- %s (%d)\n", client_id, state, value);
+    printf("%s[%d]--- %s (%d)%s\n", color, client_id, state, value, C_RESET);
     fflush(stdout);
 }
 
 //appends to execution summary
-static void summary_append(int client_id, int burst) {
-    int written = snprintf(summary + summary_len, sizeof(summary) - (size_t)summary_len, "P%d-(%d)->", client_id, burst);
-    if (written > 0 && summary_len + written < (int)sizeof(summary))
+static void summary_append(int client_id, int time_point) {
+    int written = snprintf(
+        summary + summary_len,
+        sizeof(summary) - summary_len,
+        "P%d-(%d)-",
+        client_id,
+        time_point
+    );
+
+    if (written > 0 && summary_len + written < (int)sizeof(summary)) {
         summary_len += written;
+    }
 }
 
 //prints execution summary
@@ -73,6 +85,7 @@ static void summary_print(void) {
     }
 
     // printf("%s[SCHEDULER]%s Execution summary: 0)->%s\n", C_INFO, C_RESET, summary);
+    printf("Summary: 0)->%s\n", summary);
     fflush(stdout);
     summary_len = 0;
     summary[0] = '\0';
@@ -318,7 +331,10 @@ void *scheduler_thread(void *arg) {
         int quantum = (task->round == 0) ? QUANTUM_ROUND1 : QUANTUM_REST;
 
         log_state(task->client_id, "running", task->remaining_time);
-        summary_append(task->client_id, task->burst_time);
+        // summary_append(task->client_id, task->burst_time);
+        if (task->round == 0) {
+            summary_append(task->client_id, task->burst_time);
+        }
         pthread_mutex_unlock(&queue_mutex);
 
         //start or resume process

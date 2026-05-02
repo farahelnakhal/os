@@ -310,7 +310,8 @@ void *handle_client(void *arg) {
 
             // printf("%s[INFO]%s [%s] Created demo task with burst %d\n",COLOR_INFO, COLOR_RESET, label, n);
 
-            printf("(%d) --- created (%d)\n", client_id, n);
+            // printf("(%d) --- created (%d)\n", client_id, n);
+            printf("\033[0;34m(%d) --- created (%d)\033[0m\n", client_id, n);
 
             fflush(stdout);
 
@@ -321,8 +322,8 @@ void *handle_client(void *arg) {
         } else {
 
             // normal shell command → execute immediately
-            printf("(%d) --- created (-1)\n", client_id);
-            printf("(%d) --- started (-1)\n", client_id);
+            printf("\033[0;34m(%d) --- created (-1)\033[0m\n", client_id);
+            printf("\033[0;32m(%d) --- started (-1)\033[0m\n", client_id);
             fflush(stdout);
 
             output = execute_and_capture(buffer);
@@ -331,7 +332,9 @@ void *handle_client(void *arg) {
             send(sock, output, bytes, 0);
 
             printf("[%d] <<< %zu bytes sent\n", client_id, bytes);
-            printf("(%d) --- ended (-1)\n", client_id);
+            //print ended in red
+            printf("\033[0;31m(%d) --- ended (-1)\033[0m\n", client_id);
+            // printf("(%d) --- ended (-1)\n", client_id);
             fflush(stdout);
 
             free(output);

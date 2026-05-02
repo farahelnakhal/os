@@ -46,7 +46,8 @@ int main() {
 
     while (1) {
         // print a shell-style prompt before reading each command
-        printf("$ ");
+        // printf("$ ");
+        printf(">>> ");
         fflush(stdout);
 
         // read one command line from stdin
