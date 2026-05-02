@@ -263,9 +263,9 @@ void *handle_client(void *arg) {
 
         //handle client exit request
         if (strcmp(buffer, "exit") == 0) {
-            printf("%s[RECEIVED]%s [%s] Received command: \"exit\"\n", COLOR_RECEIVED, COLOR_RESET, label);
-            printf("%s[INFO]%s [%s] Client requested disconnect. Closing connection.\n", COLOR_INFO, COLOR_RESET, label);
-
+            // printf("%s[RECEIVED]%s [%s] Received command: \"exit\"\n", COLOR_RECEIVED, COLOR_RESET, label);
+            // printf("%s[INFO]%s [%s] Client requested disconnect. Closing connection.\n", COLOR_INFO, COLOR_RESET, label);
+            printf("[%d] >>> %s\n", client_id, buffer);
             fflush(stdout);
 
             send(sock, "exit_ack", 8, 0);
@@ -273,7 +273,7 @@ void *handle_client(void *arg) {
         }
 
         //log received command
-        printf("%s[RECEIVED]%s [%s] Received command: \"%s\"\n", COLOR_RECEIVED, COLOR_RESET, label, buffer);
+        // printf("%s[RECEIVED]%s [%s] Received command: \"%s\"\n", COLOR_RECEIVED, COLOR_RESET, label, buffer);
 
         //log execution step
         printf("%s[EXECUTING]%s [%s] Executing command: \"%s\"\n", COLOR_EXECUTING, COLOR_RESET, label, buffer);
@@ -307,8 +307,9 @@ void *handle_client(void *arg) {
             task->sock = sock;
             task->pid = -1;
 
-            printf("%s[INFO]%s [%s] Created demo task with burst %d\n",
-                COLOR_INFO, COLOR_RESET, label, n);
+            // printf("%s[INFO]%s [%s] Created demo task with burst %d\n",COLOR_INFO, COLOR_RESET, label, n);
+
+            printf("(%d) --- created (%d)\n", client_id, n);
 
             fflush(stdout);
 
@@ -335,39 +336,27 @@ void *handle_client(void *arg) {
                 send(sock, error_msg, strlen(error_msg), 0);
             } else {
                 // created
-                printf("[%d]--- created (-1)\n", client_id);
+                printf("(%d) --- created (-1)\n", client_id);
+                printf("(%d) --- started (-1)\n", client_id);
                 fflush(stdout);
 
-                // started
-                printf("[%d]--- started (-1)\n", client_id);
-                fflush(stdout);
+                char *output = execute_and_capture(buffer);
 
-                // execute command
-                output = execute_and_capture(buffer);
-
-                // send output
                 size_t bytes = strlen(output);
                 send(sock, output, bytes, 0);
 
-                // log bytes sent
-                printf("[%d]<<< %zu bytes sent\n", client_id, bytes);
+                printf("[%d] <<< %zu bytes sent\n", client_id, bytes);
+                printf("(%d) --- ended (-1)\n", client_id);
                 fflush(stdout);
 
-                // ended
-                printf("[%d]--- ended (-1)\n", client_id);
-                fflush(stdout);
-
-                // print output to server terminal (like sample)
                 if (bytes > 0) {
                     printf("%s", output);
-                    if (output[bytes - 1] != '\n')
-                        printf("\n");
+                    if (output[bytes - 1] != '\n') printf("\n");
                 } else {
                     printf("(no output)\n");
                 }
 
                 free(output);
-                output = NULL;
             }
 
             free(output); //prevent memory leak from execute_and_capture

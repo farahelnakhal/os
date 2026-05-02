@@ -43,12 +43,15 @@ static int elapsed_seconds(void) {
 
 //logs task state (waiting/running/ended)
 static void log_state(int client_id, const char *state, int value) {
-    const char *colour = C_INFO;
-    if (strcmp(state, "waiting") == 0) colour = C_WAIT;
-    else if (strcmp(state, "running") == 0) colour = C_RUN;
-    else if (strcmp(state, "ended") == 0) colour = C_END;
+    // const char *colour = C_INFO;
+    // if (strcmp(state, "waiting") == 0) colour = C_WAIT;
+    // else if (strcmp(state, "running") == 0) colour = C_RUN;
+    // else if (strcmp(state, "ended") == 0) colour = C_END;
 
-    printf("%s[%d]---%s %s (%d)\n%s", colour, client_id, C_RESET, state, value, C_RESET);
+    // printf("%s[%d]---%s %s (%d)\n%s", colour, client_id, C_RESET, state, value, C_RESET);
+    // fflush(stdout);
+
+    printf("[%d]--- %s (%d)\n", client_id, state, value);
     fflush(stdout);
 }
 
@@ -178,11 +181,14 @@ static void forward_output(task_t *task) {
     char buf[4096];
     ssize_t n;
 
-    while ((n = read(sched_pipe_read_fd, buf, sizeof(buf) - 1)) > 0) {
+    while ((n = read(sched_pipe_read_fd, buf, sizeof(buf)-1)) > 0) {
         buf[n] = '\0';
-        send(task->sock, buf, (size_t)n, 0);
-        printf("%s[%d]<<<%s %zd bytes sent\n", C_INFO, task->client_id, C_RESET, n);
-        fflush(stdout);
+
+        if (task->output_len + n < (int)sizeof(task->output_buffer)) {
+            memcpy(task->output_buffer + task->output_len, buf, n);
+            task->output_len += n;
+            task->output_buffer[task->output_len] = '\0';
+        }
     }
 
     fcntl(sched_pipe_read_fd, F_SETFL, flags & ~O_NONBLOCK);
@@ -194,12 +200,14 @@ static void drain_output(task_t *task) {
 
     char buf[4096];
     ssize_t n;
-    while ((n = read(sched_pipe_read_fd, buf, sizeof(buf) - 1)) > 0) {
+    while ((n = read(sched_pipe_read_fd, buf, sizeof(buf)-1)) > 0) {
         buf[n] = '\0';
-        send(task->sock, buf, (size_t)n, 0);
 
-        printf("%s[%d]<<<%s %zd bytes sent\n", C_INFO, task->client_id, C_RESET, n);
-        fflush(stdout);
+        if (task->output_len + n < (int)sizeof(task->output_buffer)) {
+            memcpy(task->output_buffer + task->output_len, buf, n);
+            task->output_len += n;
+            task->output_buffer[task->output_len] = '\0';
+        }
     }
 
     close(sched_pipe_read_fd);
@@ -228,6 +236,8 @@ void scheduler_init(void) {
 //adds task to scheduler queue
 void scheduler_enqueue(task_t *task) {
     task->arrival_time = elapsed_seconds();
+    task->output_len = 0;
+    task->output_buffer[0] = '\0';
 
     pthread_mutex_lock(&queue_mutex);
 
@@ -356,6 +366,10 @@ void *scheduler_thread(void *arg) {
             log_state(task->client_id, "ended", 0);
             pthread_mutex_lock(&queue_mutex);
             running_task = NULL;
+            send(task->sock, task->output_buffer, task->output_len, 0);
+
+            printf("[%d]<<< %d bytes sent\n", task->client_id, task->output_len);
+            fflush(stdout);
 
             if (queue_size == 0) {
                 pthread_mutex_unlock(&queue_mutex);
@@ -364,12 +378,13 @@ void *scheduler_thread(void *arg) {
                 pthread_mutex_unlock(&queue_mutex);
             }
 
+
             free(task);
 
         } else {
             //preempt and requeue
             kill(task->pid, SIGSTOP);
-            forward_output(task);
+            // forward_output(task);
 
             task->round++;
             log_state(task->client_id, "waiting", task->remaining_time);

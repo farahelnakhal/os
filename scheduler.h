@@ -20,6 +20,8 @@ typedef struct task {
     int round;
     int sock;
     pid_t pid;
+    char output_buffer[8192];
+    int output_len;
 } task_t;
 
 void scheduler_init(void); //initializes scheduler state
