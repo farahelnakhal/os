@@ -196,20 +196,20 @@ char* execute_and_capture(char *command) {
     return output;
 }
 
-static int is_command_not_found(const char *output) {
-    //checks shell output for "command not found" error (case variations)
-    return (strstr(output, "Command not found") != NULL || strstr(output, "command not found") != NULL);}
+// static int is_command_not_found(const char *output) {
+//     //checks shell output for "command not found" error (case variations)
+//     return (strstr(output, "Command not found") != NULL || strstr(output, "command not found") != NULL);}
 
-static void extract_command_name(const char *command, char *dest, size_t dest_size) {
-    const char *start = command;
-    while (*start && isspace((unsigned char)*start)) start++; //skip leading whitespace
-    size_t i = 0;
+// static void extract_command_name(const char *command, char *dest, size_t dest_size) {
+//     const char *start = command;
+//     while (*start && isspace((unsigned char)*start)) start++; //skip leading whitespace
+//     size_t i = 0;
 
-    // copy first token (command name) into dest
-    while (*start && !isspace((unsigned char)*start) && i < dest_size - 1)
-        dest[i++] = *start++;
-    dest[i] = '\0';
-}
+//     // copy first token (command name) into dest
+//     while (*start && !isspace((unsigned char)*start) && i < dest_size - 1)
+//         dest[i++] = *start++;
+//     dest[i] = '\0';
+// }
 
 void *handle_client(void *arg) {
     client_info_t *info = (client_info_t *)arg;

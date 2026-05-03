@@ -31,7 +31,8 @@ static int summary_len = 0;
 
 //synchronization
 static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
-static sem_t queue_sem;
+static sem_t *queue_sem = SEM_FAILED;
+static const char *queue_sem_name = "/myshell_queue_sem";
 
 static int total_time = 0;
 
@@ -243,8 +244,10 @@ void scheduler_init(void) {
     summary[0] = '\0';
 
     clock_gettime(CLOCK_MONOTONIC, &server_start);
-    if (sem_init(&queue_sem, 0, 0) != 0) {
-        perror("sem_init");
+    sem_unlink(queue_sem_name);
+    queue_sem = sem_open(queue_sem_name, O_CREAT, 0600, 0);
+    if (queue_sem == SEM_FAILED) {
+        perror("sem_open");
         exit(EXIT_FAILURE);
     }
 
@@ -272,7 +275,7 @@ void scheduler_enqueue(task_t *task) {
 
     log_state(task->client_id, "waiting", task->remaining_time);
     pthread_mutex_unlock(&queue_mutex);
-    sem_post(&queue_sem);
+    sem_post(queue_sem);
 }
 
 //removes all tasks for a disconnected client
@@ -304,7 +307,7 @@ void scheduler_remove_client(int client_id) {
         if (queue[i]->client_id == client_id) {
             if (queue[i]->pid > 0) kill(queue[i]->pid, SIGKILL);
             queue_remove_at(i);
-            sem_trywait(&queue_sem);
+            sem_trywait(queue_sem);
         } else {
             i++;
         }
@@ -321,7 +324,7 @@ void *scheduler_thread(void *arg) {
 
     while (1) {
         //wait for available tasks
-        sem_wait(&queue_sem);
+        sem_wait(queue_sem);
         pthread_mutex_lock(&queue_mutex);
         int idx = select_next();
 
@@ -438,7 +441,7 @@ void *scheduler_thread(void *arg) {
             }
 
             pthread_mutex_unlock(&queue_mutex);
-            sem_post(&queue_sem);
+            sem_post(queue_sem);
         }
     }
 
