@@ -39,6 +39,7 @@ Remaining-First + FCFS tiebreak).
 
 ## Repository Layout
 
+```
 os-main/
 ├── main.c              # entry point for the standalone shell (myshell)
 ├── simple.c/.h         # simple (non-piped) command execution + redirection
@@ -52,6 +53,7 @@ os-main/
 ├── makefile
 ├── test.sh             # automated regression tests for the shell/server
 └── reports/            # phase 1-4 project reports (PDF)
+```
 
 ## Building
 
