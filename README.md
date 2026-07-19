@@ -1,4 +1,4 @@
-# MyShell — Custom UNIX Shell with Multithreaded Client-Server Scheduler
+# MyShell: Custom UNIX Shell with Multithreaded Client-Server Scheduler
 
 A C project built in four phases for an Operating Systems course. It starts as a
 standalone UNIX shell supporting redirection and pipelines, then grows into a
