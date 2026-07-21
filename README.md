@@ -1,9 +1,9 @@
 # MyShell: Custom UNIX Shell with Multithreaded Client-Server Scheduler
 
-A C project built in four phases for an Operating Systems course. It starts as a
-standalone UNIX shell supporting redirection and pipelines, then grows into a
-multithreaded client-server system where a scheduler thread simulates a single
-CPU running multiple clients' jobs concurrently (Round Robin + Shortest-Job-
+A C project built in four phases. It starts as a standalone UNIX shell 
+supporting redirection and pipelines, then grows into a multithreaded 
+client-server system where a scheduler thread simulates a single CPU 
+running multiple clients' jobs concurrently (Round Robin + Shortest-Job-
 Remaining-First + FCFS tiebreak).
 
 ## Features
